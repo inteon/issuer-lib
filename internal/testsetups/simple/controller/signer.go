@@ -67,7 +67,7 @@ func (Signer) Check(ctx context.Context, issuerObject v1alpha1.Issuer) error {
 	return nil
 }
 
-func (Signer) Sign(ctx context.Context, cr signer.CertificateRequestObject, issuerObject v1alpha1.Issuer) (signer.PEMBundle, error) {
+func (Signer) Sign(ctx context.Context, cr signer.RequestObject, issuerObject v1alpha1.Issuer) (signer.PEMBundle, error) {
 	// generate random ca private key
 	caPrivateKey, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
 	if err != nil {
@@ -87,20 +87,18 @@ func (Signer) Sign(ctx context.Context, cr signer.CertificateRequestObject, issu
 		BasicConstraintsValid: true,
 	}
 
-	// load client certificate request
-	clientCRTTemplate, _, _, err := cr.GetRequest()
+	// load leaf certificate request
+	leafCRTTemplate, _, _, err := cr.GetRequest()
 	if err != nil {
 		return signer.PEMBundle{}, err
 	}
 
-	// create client certificate from template and CA public key
-	clientCRTRaw, err := x509.CreateCertificate(rand.Reader, clientCRTTemplate, caCRT, clientCRTTemplate.PublicKey, caPrivateKey)
+	// create leaf certificate from template and CA public key
+	leafCRTRaw, err := x509.CreateCertificate(rand.Reader, leafCRTTemplate, caCRT, leafCRTTemplate.PublicKey, caPrivateKey)
 	if err != nil {
 		panic(err)
 	}
 
-	clientCrt := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: clientCRTRaw})
-	return signer.PEMBundle{
-		ChainPEM: clientCrt,
-	}, nil
+	leafCrt := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafCRTRaw})
+	return signer.PEMBundleFromBytes(leafCrt)
 }

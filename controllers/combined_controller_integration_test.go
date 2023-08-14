@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	cmutil "github.com/cert-manager/cert-manager/pkg/api/util"
 	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	cmgen "github.com/cert-manager/cert-manager/test/unit/gen"
@@ -75,7 +74,7 @@ func TestCombinedControllerTemporaryFailedCertificateRequestRetrigger(t *testing
 						return ctx.Err()
 					}
 				},
-				Sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, error) {
+				Sign: func(_ context.Context, _ signer.RequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, error) {
 					select {
 					case err := <-signResult:
 						return signer.PEMBundle{}, err
@@ -150,7 +149,7 @@ func TestCombinedControllerTemporaryFailedCertificateRequestRetrigger(t *testing
 					cmapi.IssuerConditionReady,
 					cmmeta.ConditionTrue,
 					v1alpha1.IssuerConditionReasonChecked,
-					"checked",
+					"Succeeded checking the issuer",
 				),
 			)
 
@@ -177,7 +176,7 @@ func TestCombinedControllerTemporaryFailedCertificateRequestRetrigger(t *testing
 					(readyCondition.ObservedGeneration != issuer.Generation) ||
 					(readyCondition.Status != cmmeta.ConditionTrue) ||
 					(readyCondition.Reason != v1alpha1.IssuerConditionReasonChecked) ||
-					(readyCondition.Message != "checked") {
+					(readyCondition.Message != "Succeeded checking the issuer") {
 					return fmt.Errorf("incorrect ready condition: %v", readyCondition)
 				}
 
@@ -195,7 +194,7 @@ func TestCombinedControllerTemporaryFailedCertificateRequestRetrigger(t *testing
 
 			t.Log("Waiting for CertificateRequest to have a Pending IssuerOutdated condition")
 			err = checkCr1Complete(func(obj runtime.Object) error {
-				readyCondition := cmutil.GetCertificateRequestCondition(obj.(*cmapi.CertificateRequest), cmapi.CertificateRequestConditionReady)
+				readyCondition := conditions.GetCertificateRequestStatusCondition(obj.(*cmapi.CertificateRequest).Status.Conditions, cmapi.CertificateRequestConditionReady)
 
 				if (readyCondition == nil) ||
 					(readyCondition.Status != cmmeta.ConditionFalse) ||
@@ -226,7 +225,7 @@ func TestCombinedControllerTemporaryFailedCertificateRequestRetrigger(t *testing
 
 			t.Log("Waiting for CertificateRequest to have a Pending IssuerNotReady condition")
 			err = checkCr2Complete(func(obj runtime.Object) error {
-				readyCondition := cmutil.GetCertificateRequestCondition(obj.(*cmapi.CertificateRequest), cmapi.CertificateRequestConditionReady)
+				readyCondition := conditions.GetCertificateRequestStatusCondition(obj.(*cmapi.CertificateRequest).Status.Conditions, cmapi.CertificateRequestConditionReady)
 
 				if (readyCondition == nil) ||
 					(readyCondition.Status != tc.certificateReadyCondition.Status) ||
@@ -250,7 +249,7 @@ func TestCombinedControllerTemporaryFailedCertificateRequestRetrigger(t *testing
 						(readyCondition.ObservedGeneration != issuer.Generation) ||
 						(readyCondition.Status != cmmeta.ConditionTrue) ||
 						(readyCondition.Reason != v1alpha1.IssuerConditionReasonChecked) ||
-						(readyCondition.Message != "checked") {
+						(readyCondition.Message != "Succeeded checking the issuer") {
 						return fmt.Errorf("incorrect ready condition: %v", readyCondition)
 					}
 
@@ -262,12 +261,12 @@ func TestCombinedControllerTemporaryFailedCertificateRequestRetrigger(t *testing
 				checkComplete = kubeClients.StartObjectWatch(t, ctx, cr)
 				signResult <- error(nil)
 				err = checkComplete(func(obj runtime.Object) error {
-					readyCondition := cmutil.GetCertificateRequestCondition(obj.(*cmapi.CertificateRequest), cmapi.CertificateRequestConditionReady)
+					readyCondition := conditions.GetCertificateRequestStatusCondition(obj.(*cmapi.CertificateRequest).Status.Conditions, cmapi.CertificateRequestConditionReady)
 
 					if (readyCondition == nil) ||
 						(readyCondition.Status != cmmeta.ConditionTrue) ||
 						(readyCondition.Reason != cmapi.CertificateRequestReasonIssued) ||
-						(readyCondition.Message != "issued") {
+						(readyCondition.Message != "Succeeded signing the CertificateRequest") {
 						return fmt.Errorf("incorrect ready condition: %v", readyCondition)
 					}
 

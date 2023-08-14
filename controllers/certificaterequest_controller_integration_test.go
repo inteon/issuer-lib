@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	cmutil "github.com/cert-manager/cert-manager/pkg/api/util"
 	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	cmgen "github.com/cert-manager/cert-manager/test/unit/gen"
@@ -83,21 +82,23 @@ func TestCertificateRequestControllerIntegrationIssuerInitiallyNotFoundAndNotRea
 	counters := []uint64{}
 	ctx = setupControllersAPIServerAndClient(t, ctx, kubeClients,
 		func(mgr ctrl.Manager) controllerInterface {
-			return &CertificateRequestReconciler{
-				IssuerTypes:        []v1alpha1.Issuer{&api.SimpleIssuer{}},
-				ClusterIssuerTypes: []v1alpha1.Issuer{&api.SimpleClusterIssuer{}},
-				FieldOwner:         fieldOwner,
-				MaxRetryDuration:   time.Minute,
-				EventSource:        kubeutil.NewEventStore(),
-				Client:             mgr.GetClient(),
-				Sign: func(_ context.Context, cr signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, error) {
-					atomic.AddUint64(&counters[extractIdFromNamespace(t, cr.GetNamespace())], 1)
-					return signer.PEMBundle{
-						ChainPEM: []byte("cert"),
-					}, nil
+			return &CertificateRequestController{
+				RequestController: RequestController{
+					IssuerTypes:        []v1alpha1.Issuer{&api.SimpleIssuer{}},
+					ClusterIssuerTypes: []v1alpha1.Issuer{&api.SimpleClusterIssuer{}},
+					FieldOwner:         fieldOwner,
+					MaxRetryDuration:   time.Minute,
+					EventSource:        kubeutil.NewEventStore(),
+					Client:             mgr.GetClient(),
+					Sign: func(_ context.Context, cr signer.RequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, error) {
+						atomic.AddUint64(&counters[extractIdFromNamespace(t, cr.GetNamespace())], 1)
+						return signer.PEMBundle{
+							ChainPEM: []byte("cert"),
+						}, nil
+					},
+					EventRecorder: record.NewFakeRecorder(100),
+					Clock:         clock.RealClock{},
 				},
-				EventRecorder: record.NewFakeRecorder(100),
-				Clock:         clock.RealClock{},
 			}
 		},
 	)
@@ -149,7 +150,7 @@ func TestCertificateRequestControllerIntegrationIssuerInitiallyNotFoundAndNotRea
 			createApprovedCR(t, ctx, kubeClients.Client, clock.RealClock{}, cr)
 			t.Log("Waiting for controller to mark the CertificateRequest as IssuerNotFound")
 			err := checkComplete(func(obj runtime.Object) error {
-				readyCondition := cmutil.GetCertificateRequestCondition(obj.(*cmapi.CertificateRequest), cmapi.CertificateRequestConditionReady)
+				readyCondition := conditions.GetCertificateRequestStatusCondition(obj.(*cmapi.CertificateRequest).Status.Conditions, cmapi.CertificateRequestConditionReady)
 
 				if (readyCondition == nil) ||
 					(readyCondition.Status != cmmeta.ConditionFalse) ||
@@ -167,7 +168,7 @@ func TestCertificateRequestControllerIntegrationIssuerInitiallyNotFoundAndNotRea
 			issuer := createIssuerForCR(t, ctx, kubeClients.Client, cr)
 			t.Log("Waiting for the controller to marks the CertificateRequest as IssuerNotReady")
 			err = checkComplete(func(obj runtime.Object) error {
-				readyCondition := cmutil.GetCertificateRequestCondition(obj.(*cmapi.CertificateRequest), cmapi.CertificateRequestConditionReady)
+				readyCondition := conditions.GetCertificateRequestStatusCondition(obj.(*cmapi.CertificateRequest).Status.Conditions, cmapi.CertificateRequestConditionReady)
 
 				if (readyCondition == nil) ||
 					(readyCondition.Status != cmmeta.ConditionFalse) ||
@@ -185,12 +186,12 @@ func TestCertificateRequestControllerIntegrationIssuerInitiallyNotFoundAndNotRea
 			markIssuerReady(t, ctx, kubeClients.Client, clock.RealClock{}, fieldOwner, issuer)
 			t.Log("Waiting for the controller to marks the CertificateRequest as Ready")
 			err = checkComplete(func(obj runtime.Object) error {
-				readyCondition := cmutil.GetCertificateRequestCondition(obj.(*cmapi.CertificateRequest), cmapi.CertificateRequestConditionReady)
+				readyCondition := conditions.GetCertificateRequestStatusCondition(obj.(*cmapi.CertificateRequest).Status.Conditions, cmapi.CertificateRequestConditionReady)
 
 				if (readyCondition == nil) ||
 					(readyCondition.Status != cmmeta.ConditionTrue) ||
 					(readyCondition.Reason != cmapi.CertificateRequestReasonIssued) ||
-					(readyCondition.Message != "issued") {
+					(readyCondition.Message != "Succeeded signing the CertificateRequest") {
 					return fmt.Errorf("incorrect ready condition: %v", readyCondition)
 				}
 
@@ -209,7 +210,7 @@ func TestCertificateRequestControllerIntegrationSetCondition(t *testing.T) {
 	t.Parallel()
 
 	t.Log(
-		"Tests to show that the CertificateRequestController handles SetCertificateRequestConditionError errors correctly",
+		"Tests to show that the CertificateRequestController handles SetRequestConditionError errors correctly",
 		"i.e. it sets the custom condition on the CertificateRequest",
 	)
 
@@ -222,24 +223,26 @@ func TestCertificateRequestControllerIntegrationSetCondition(t *testing.T) {
 	signResult := make(chan error, 10)
 	ctx = setupControllersAPIServerAndClient(t, ctx, kubeClients,
 		func(mgr ctrl.Manager) controllerInterface {
-			return &CertificateRequestReconciler{
-				IssuerTypes:        []v1alpha1.Issuer{&api.SimpleIssuer{}},
-				ClusterIssuerTypes: []v1alpha1.Issuer{&api.SimpleClusterIssuer{}},
-				FieldOwner:         fieldOwner,
-				MaxRetryDuration:   time.Minute,
-				EventSource:        kubeutil.NewEventStore(),
-				Client:             mgr.GetClient(),
-				Sign: func(ctx context.Context, cr signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, error) {
-					atomic.AddUint64(&counter, 1)
-					select {
-					case err := <-signResult:
-						return signer.PEMBundle{}, err
-					case <-ctx.Done():
-						return signer.PEMBundle{}, ctx.Err()
-					}
+			return &CertificateRequestController{
+				RequestController: RequestController{
+					IssuerTypes:        []v1alpha1.Issuer{&api.SimpleIssuer{}},
+					ClusterIssuerTypes: []v1alpha1.Issuer{&api.SimpleClusterIssuer{}},
+					FieldOwner:         fieldOwner,
+					MaxRetryDuration:   time.Minute,
+					EventSource:        kubeutil.NewEventStore(),
+					Client:             mgr.GetClient(),
+					Sign: func(ctx context.Context, cr signer.RequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, error) {
+						atomic.AddUint64(&counter, 1)
+						select {
+						case err := <-signResult:
+							return signer.PEMBundle{}, err
+						case <-ctx.Done():
+							return signer.PEMBundle{}, ctx.Err()
+						}
+					},
+					EventRecorder: record.NewFakeRecorder(100),
+					Clock:         clock.RealClock{},
 				},
-				EventRecorder: record.NewFakeRecorder(100),
-				Clock:         clock.RealClock{},
 			}
 		},
 	)
@@ -271,7 +274,7 @@ func TestCertificateRequestControllerIntegrationSetCondition(t *testing.T) {
 	createApprovedCR(t, ctx, kubeClients.Client, clock.RealClock{}, cr)
 	t.Log("Waiting for controller to mark the CertificateRequest as IssuerNotFound")
 	err := checkComplete(func(obj runtime.Object) error {
-		readyCondition := cmutil.GetCertificateRequestCondition(obj.(*cmapi.CertificateRequest), cmapi.CertificateRequestConditionReady)
+		readyCondition := conditions.GetCertificateRequestStatusCondition(obj.(*cmapi.CertificateRequest).Status.Conditions, cmapi.CertificateRequestConditionReady)
 
 		if (readyCondition == nil) ||
 			(readyCondition.Status != cmmeta.ConditionFalse) ||
@@ -289,7 +292,7 @@ func TestCertificateRequestControllerIntegrationSetCondition(t *testing.T) {
 	issuer := createIssuerForCR(t, ctx, kubeClients.Client, cr)
 	t.Log("Waiting for the controller to marks the CertificateRequest as IssuerNotReady")
 	err = checkComplete(func(obj runtime.Object) error {
-		readyCondition := cmutil.GetCertificateRequestCondition(obj.(*cmapi.CertificateRequest), cmapi.CertificateRequestConditionReady)
+		readyCondition := conditions.GetCertificateRequestStatusCondition(obj.(*cmapi.CertificateRequest).Status.Conditions, cmapi.CertificateRequestConditionReady)
 
 		if (readyCondition == nil) ||
 			(readyCondition.Status != cmmeta.ConditionFalse) ||
@@ -307,14 +310,14 @@ func TestCertificateRequestControllerIntegrationSetCondition(t *testing.T) {
 	markIssuerReady(t, ctx, kubeClients.Client, clock.RealClock{}, fieldOwner, issuer)
 
 	checkComplete = kubeClients.StartObjectWatch(t, ctx, cr)
-	signResult <- signer.SetCertificateRequestConditionError{
-		Err:           fmt.Errorf("[err message1]"),
-		ConditionType: "[condition type]",
-		Status:        cmmeta.ConditionTrue,
-		Reason:        "[reason]",
+	signResult <- signer.SetRequestConditionError{
+		Err:             fmt.Errorf("[err message1]"),
+		ConditionType:   "[condition type]",
+		ConditionStatus: metav1.ConditionTrue,
+		ConditionReason: "[reason]",
 	}
 	err = checkComplete(func(obj runtime.Object) error {
-		customCondition := cmutil.GetCertificateRequestCondition(obj.(*cmapi.CertificateRequest), "[condition type]")
+		customCondition := conditions.GetCertificateRequestStatusCondition(obj.(*cmapi.CertificateRequest).Status.Conditions, "[condition type]")
 
 		if (customCondition == nil) ||
 			(customCondition.Status != cmmeta.ConditionTrue) ||
@@ -328,14 +331,14 @@ func TestCertificateRequestControllerIntegrationSetCondition(t *testing.T) {
 	require.NoError(t, err)
 
 	checkComplete = kubeClients.StartObjectWatch(t, ctx, cr)
-	signResult <- signer.SetCertificateRequestConditionError{
-		Err:           fmt.Errorf("[err message2]"),
-		ConditionType: "[condition type]",
-		Status:        cmmeta.ConditionTrue,
-		Reason:        "[reason]",
+	signResult <- signer.SetRequestConditionError{
+		Err:             fmt.Errorf("[err message2]"),
+		ConditionType:   "[condition type]",
+		ConditionStatus: metav1.ConditionTrue,
+		ConditionReason: "[reason]",
 	}
 	err = checkComplete(func(obj runtime.Object) error {
-		customCondition := cmutil.GetCertificateRequestCondition(obj.(*cmapi.CertificateRequest), "[condition type]")
+		customCondition := conditions.GetCertificateRequestStatusCondition(obj.(*cmapi.CertificateRequest).Status.Conditions, "[condition type]")
 
 		if (customCondition == nil) ||
 			(customCondition.Status != cmmeta.ConditionTrue) ||
@@ -352,12 +355,12 @@ func TestCertificateRequestControllerIntegrationSetCondition(t *testing.T) {
 	signResult <- nil
 	t.Log("Waiting for the controller to marks the CertificateRequest as Ready")
 	err = checkComplete(func(obj runtime.Object) error {
-		readyCondition := cmutil.GetCertificateRequestCondition(obj.(*cmapi.CertificateRequest), cmapi.CertificateRequestConditionReady)
+		readyCondition := conditions.GetCertificateRequestStatusCondition(obj.(*cmapi.CertificateRequest).Status.Conditions, cmapi.CertificateRequestConditionReady)
 
 		if (readyCondition == nil) ||
 			(readyCondition.Status != cmmeta.ConditionTrue) ||
 			(readyCondition.Reason != cmapi.CertificateRequestReasonIssued) ||
-			(readyCondition.Message != "issued") {
+			(readyCondition.Message != "Succeeded signing the CertificateRequest") {
 			return fmt.Errorf("incorrect ready condition: %v", readyCondition)
 		}
 
@@ -421,7 +424,7 @@ func markIssuerReady(t *testing.T, ctx context.Context, kc client.Client, clock 
 		cmapi.IssuerConditionReady,
 		cmmeta.ConditionTrue,
 		v1alpha1.IssuerConditionReasonChecked,
-		"checked",
+		"Succeeded checking the issuer",
 	)
 
 	err := kubeutil.SetGroupVersionKind(kc.Scheme(), issuer)

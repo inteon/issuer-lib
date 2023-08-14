@@ -33,7 +33,7 @@ func SetIssuerStatusCondition(
 	conditionType cmapi.IssuerConditionType,
 	status cmmeta.ConditionStatus,
 	reason, message string,
-) (*cmapi.IssuerCondition, *metav1.Time) {
+) (condition *cmapi.IssuerCondition, updatedAt *metav1.Time) {
 	newCondition := cmapi.IssuerCondition{
 		Type:               conditionType,
 		Status:             status,

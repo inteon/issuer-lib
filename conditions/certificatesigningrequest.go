@@ -32,7 +32,7 @@ func SetCertificateSigningRequestStatusCondition(
 	conditionType certificatesv1.RequestConditionType,
 	status v1.ConditionStatus,
 	reason, message string,
-) (*certificatesv1.CertificateSigningRequestCondition, *metav1.Time) {
+) (condition *certificatesv1.CertificateSigningRequestCondition, updatedAt *metav1.Time) {
 	newCondition := certificatesv1.CertificateSigningRequestCondition{
 		Type:    conditionType,
 		Status:  status,

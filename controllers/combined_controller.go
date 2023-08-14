@@ -45,9 +45,9 @@ type CombinedController struct {
 	// Sign connects to a CA and returns a signed certificate for the supplied CertificateRequest.
 	signer.Sign
 
-	// IgnoreCertificateRequest is an optional function that can prevent the CertificateRequest
+	// IgnoreRequest is an optional function that can prevent the CertificateRequest
 	// and Kubernetes CSR controllers from reconciling a CertificateRequest resource.
-	signer.IgnoreCertificateRequest
+	signer.IgnoreRequest
 	// IgnoreIssuer is an optional function that can prevent the issuer controllers from
 	// reconciling an issuer resource.
 	signer.IgnoreIssuer
@@ -117,46 +117,50 @@ func (r *CombinedController) SetupWithManager(ctx context.Context, mgr ctrl.Mana
 	}
 
 	if !r.DisableCertificateRequestController {
-		if err = (&CertificateRequestReconciler{
-			IssuerTypes:        r.IssuerTypes,
-			ClusterIssuerTypes: r.ClusterIssuerTypes,
+		if err = (&CertificateRequestController{
+			RequestController: RequestController{
+				IssuerTypes:        r.IssuerTypes,
+				ClusterIssuerTypes: r.ClusterIssuerTypes,
 
-			FieldOwner:       r.FieldOwner,
-			MaxRetryDuration: r.MaxRetryDuration,
-			EventSource:      eventSource,
+				FieldOwner:       r.FieldOwner,
+				MaxRetryDuration: r.MaxRetryDuration,
+				EventSource:      eventSource,
 
-			Client:                   cl,
-			Sign:                     r.Sign,
-			IgnoreCertificateRequest: r.IgnoreCertificateRequest,
-			EventRecorder:            r.EventRecorder,
-			Clock:                    r.Clock,
+				Client:        cl,
+				Sign:          r.Sign,
+				IgnoreRequest: r.IgnoreRequest,
+				EventRecorder: r.EventRecorder,
+				Clock:         r.Clock,
+
+				PostSetupWithManager: r.PostSetupWithManager,
+			},
 
 			SetCAOnCertificateRequest: r.SetCAOnCertificateRequest,
-
-			PostSetupWithManager: r.PostSetupWithManager,
 		}).SetupWithManager(ctx, mgr); err != nil {
-			return fmt.Errorf("CertificateRequestReconciler: %w", err)
+			return fmt.Errorf("CertificateRequestController: %w", err)
 		}
 	}
 
 	if !r.DisableKubernetesCSRController {
-		if err = (&CertificateSigningRequestReconciler{
-			IssuerTypes:        r.IssuerTypes,
-			ClusterIssuerTypes: r.ClusterIssuerTypes,
+		if err = (&CertificateSigningRequestController{
+			RequestController: RequestController{
+				IssuerTypes:        r.IssuerTypes,
+				ClusterIssuerTypes: r.ClusterIssuerTypes,
 
-			FieldOwner:       r.FieldOwner,
-			MaxRetryDuration: r.MaxRetryDuration,
-			EventSource:      eventSource,
+				FieldOwner:       r.FieldOwner,
+				MaxRetryDuration: r.MaxRetryDuration,
+				EventSource:      eventSource,
 
-			Client:                   cl,
-			Sign:                     r.Sign,
-			IgnoreCertificateRequest: r.IgnoreCertificateRequest,
-			EventRecorder:            r.EventRecorder,
-			Clock:                    r.Clock,
+				Client:        cl,
+				Sign:          r.Sign,
+				IgnoreRequest: r.IgnoreRequest,
+				EventRecorder: r.EventRecorder,
+				Clock:         r.Clock,
 
-			PostSetupWithManager: r.PostSetupWithManager,
+				PostSetupWithManager: r.PostSetupWithManager,
+			},
 		}).SetupWithManager(ctx, mgr); err != nil {
-			return fmt.Errorf("CertificateRequestReconciler: %w", err)
+			return fmt.Errorf("CertificateRequestController: %w", err)
 		}
 	}
 

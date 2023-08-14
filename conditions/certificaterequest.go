@@ -32,7 +32,7 @@ func SetCertificateRequestStatusCondition(
 	conditionType cmapi.CertificateRequestConditionType,
 	status cmmeta.ConditionStatus,
 	reason, message string,
-) (*cmapi.CertificateRequestCondition, *metav1.Time) {
+) (condition *cmapi.CertificateRequestCondition, updatedAt *metav1.Time) {
 	newCondition := cmapi.CertificateRequestCondition{
 		Type:    conditionType,
 		Status:  status,
@@ -74,4 +74,16 @@ func SetCertificateRequestStatusCondition(
 	*patchConditions = append(*patchConditions, newCondition)
 
 	return &newCondition, &nowTime
+}
+
+func GetCertificateRequestStatusCondition(
+	conditions []cmapi.CertificateRequestCondition,
+	conditionType cmapi.CertificateRequestConditionType,
+) *cmapi.CertificateRequestCondition {
+	for _, cond := range conditions {
+		if cond.Type == conditionType {
+			return &cond
+		}
+	}
+	return nil
 }

@@ -78,7 +78,7 @@ func setupControllersAPIServerAndClient(t *testing.T, parentCtx context.Context,
 	require.NoError(t, err)
 
 	scheme := runtime.NewScheme()
-	require.NoError(t, setupCertificateRequestReconcilerScheme(scheme))
+	require.NoError(t, setupCertificateRequestControllerScheme(scheme))
 	require.NoError(t, api.AddToScheme(scheme))
 	require.NoError(t, corev1.AddToScheme(scheme))
 

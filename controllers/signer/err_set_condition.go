@@ -17,11 +17,10 @@ limitations under the License.
 package signer
 
 import (
-	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
-	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// The SetCertificateRequestConditionError error is meant to be returned by the
+// The SetRequestConditionError error is meant to be returned by the
 // Sign function. When Sign returns this error, the caller (i.e., the certificate
 // request controller) is expected to update the CertificateRequest with the
 // condition contained in the error.
@@ -30,19 +29,20 @@ import (
 // signer.Pending error and will be handled accordingly.
 //
 // > This error should be returned only by the Sign function.
-type SetCertificateRequestConditionError struct {
-	Err           error
-	ConditionType cmapi.CertificateRequestConditionType
-	Status        cmmeta.ConditionStatus
-	Reason        string
+type SetRequestConditionError struct {
+	Err error
+
+	ConditionType   string
+	ConditionStatus metav1.ConditionStatus
+	ConditionReason string
 }
 
-var _ error = SetCertificateRequestConditionError{}
+var _ error = SetRequestConditionError{}
 
-func (ve SetCertificateRequestConditionError) Unwrap() error {
+func (ve SetRequestConditionError) Unwrap() error {
 	return ve.Err
 }
 
-func (ve SetCertificateRequestConditionError) Error() string {
+func (ve SetRequestConditionError) Error() string {
 	return ve.Err.Error()
 }
