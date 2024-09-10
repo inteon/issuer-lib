@@ -395,8 +395,8 @@ func (*testissuer) DeepCopyObject() runtime.Object {
 	panic("not implemented")
 }
 
-func (ti *testissuer) GetStatus() *v1alpha1.IssuerStatus {
-	return ti.Status
+func (ti *testissuer) GetConditions() []metav1.Condition {
+	return ti.Status.Conditions
 }
 
 func (ti *testissuer) GetIssuerTypeIdentifier() string {
@@ -434,7 +434,7 @@ func TestLinkedIssuerPredicate(t *testing.T) {
 					testutil.SetTestIssuerStatusCondition(
 						fakeClock,
 						"random",
-						cmmeta.ConditionFalse,
+						metav1.ConditionFalse,
 						"test1",
 						"test1",
 					),
@@ -443,7 +443,7 @@ func TestLinkedIssuerPredicate(t *testing.T) {
 					testutil.SetTestIssuerStatusCondition(
 						fakeClock,
 						"random",
-						cmmeta.ConditionTrue,
+						metav1.ConditionTrue,
 						"test2",
 						"test2",
 					),
@@ -458,8 +458,8 @@ func TestLinkedIssuerPredicate(t *testing.T) {
 				ObjectNew: testutil.TestIssuerFrom(issuer1,
 					testutil.SetTestIssuerStatusCondition(
 						fakeClock,
-						cmapi.IssuerConditionReady,
-						cmmeta.ConditionFalse,
+						v1alpha1.IssuerConditionTypeReady,
+						metav1.ConditionFalse,
 						"reason",
 						"message",
 					),
@@ -474,8 +474,8 @@ func TestLinkedIssuerPredicate(t *testing.T) {
 				ObjectNew: testutil.TestIssuerFrom(issuer1,
 					testutil.SetTestIssuerStatusCondition(
 						fakeClock,
-						cmapi.IssuerConditionReady,
-						cmmeta.ConditionFalse,
+						v1alpha1.IssuerConditionTypeReady,
+						metav1.ConditionFalse,
 						"reason",
 						"message",
 					),
@@ -489,8 +489,8 @@ func TestLinkedIssuerPredicate(t *testing.T) {
 				ObjectOld: testutil.TestIssuerFrom(issuer1,
 					testutil.SetTestIssuerStatusCondition(
 						fakeClock,
-						cmapi.IssuerConditionReady,
-						cmmeta.ConditionFalse,
+						v1alpha1.IssuerConditionTypeReady,
+						metav1.ConditionFalse,
 						"reason1",
 						"message1",
 					),
@@ -498,8 +498,8 @@ func TestLinkedIssuerPredicate(t *testing.T) {
 				ObjectNew: testutil.TestIssuerFrom(issuer1,
 					testutil.SetTestIssuerStatusCondition(
 						fakeClock,
-						cmapi.IssuerConditionReady,
-						cmmeta.ConditionFalse,
+						v1alpha1.IssuerConditionTypeReady,
+						metav1.ConditionFalse,
 						"reason2",
 						"message2",
 					),
@@ -513,8 +513,8 @@ func TestLinkedIssuerPredicate(t *testing.T) {
 				ObjectOld: testutil.TestIssuerFrom(issuer1,
 					testutil.SetTestIssuerStatusCondition(
 						fakeClock,
-						cmapi.IssuerConditionReady,
-						cmmeta.ConditionFalse,
+						v1alpha1.IssuerConditionTypeReady,
+						metav1.ConditionFalse,
 						"reason1",
 						"message1",
 					),
@@ -523,8 +523,8 @@ func TestLinkedIssuerPredicate(t *testing.T) {
 					testutil.SetTestIssuerGeneration(2),
 					testutil.SetTestIssuerStatusCondition(
 						fakeClock,
-						cmapi.IssuerConditionReady,
-						cmmeta.ConditionFalse,
+						v1alpha1.IssuerConditionTypeReady,
+						metav1.ConditionFalse,
 						"reason2",
 						"message2",
 					),
@@ -538,8 +538,8 @@ func TestLinkedIssuerPredicate(t *testing.T) {
 				ObjectOld: testutil.TestIssuerFrom(issuer1,
 					testutil.SetTestIssuerStatusCondition(
 						fakeClock,
-						cmapi.IssuerConditionReady,
-						cmmeta.ConditionFalse,
+						v1alpha1.IssuerConditionTypeReady,
+						metav1.ConditionFalse,
 						"reason",
 						"message",
 					),
@@ -547,8 +547,8 @@ func TestLinkedIssuerPredicate(t *testing.T) {
 				ObjectNew: testutil.TestIssuerFrom(issuer1,
 					testutil.SetTestIssuerStatusCondition(
 						fakeClock,
-						cmapi.IssuerConditionReady,
-						cmmeta.ConditionTrue,
+						v1alpha1.IssuerConditionTypeReady,
+						metav1.ConditionTrue,
 						"reason",
 						"message",
 					),
@@ -646,8 +646,8 @@ func TestIssuerPredicate(t *testing.T) {
 				ObjectNew: testutil.TestIssuerFrom(issuer1,
 					testutil.SetTestIssuerStatusCondition(
 						fakeClock,
-						cmapi.IssuerConditionReady,
-						cmmeta.ConditionFalse,
+						v1alpha1.IssuerConditionTypeReady,
+						metav1.ConditionFalse,
 						"reason",
 						"message",
 					),
