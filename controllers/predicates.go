@@ -136,19 +136,19 @@ func (LinkedIssuerPredicate) Update(e event.UpdateEvent) bool {
 	issuerOld, okOld := e.ObjectOld.(v1alpha1.Issuer)
 	issuerNew, okNew := e.ObjectNew.(v1alpha1.Issuer)
 	if (!okOld || !okNew) ||
-		(issuerOld.GetStatus() == nil || issuerNew.GetStatus() == nil) {
+		(issuerOld.GetConditions() == nil || issuerNew.GetConditions() == nil) {
 		// a reference object is invalid, just reconcile to be safe
 		return true
 	}
 
 	readyOld := conditions.GetIssuerStatusCondition(
-		issuerOld.GetStatus().Conditions,
-		cmapi.IssuerConditionReady,
+		issuerOld.GetConditions(),
+		v1alpha1.IssuerConditionTypeReady,
 	)
 
 	readyNew := conditions.GetIssuerStatusCondition(
-		issuerNew.GetStatus().Conditions,
-		cmapi.IssuerConditionReady,
+		issuerNew.GetConditions(),
+		v1alpha1.IssuerConditionTypeReady,
 	)
 
 	if readyOld == nil || readyNew == nil {
@@ -185,19 +185,19 @@ func (IssuerPredicate) Update(e event.UpdateEvent) bool {
 	issuerOld, okOld := e.ObjectOld.(v1alpha1.Issuer)
 	issuerNew, okNew := e.ObjectNew.(v1alpha1.Issuer)
 	if (!okOld || !okNew) ||
-		(issuerOld.GetStatus() == nil || issuerNew.GetStatus() == nil) {
+		(issuerOld.GetConditions() == nil || issuerNew.GetConditions() == nil) {
 		// a reference object is invalid, just reconcile to be safe
 		return true
 	}
 
 	readyOld := conditions.GetIssuerStatusCondition(
-		issuerOld.GetStatus().Conditions,
-		cmapi.IssuerConditionReady,
+		issuerOld.GetConditions(),
+		v1alpha1.IssuerConditionTypeReady,
 	)
 
 	readyNew := conditions.GetIssuerStatusCondition(
-		issuerNew.GetStatus().Conditions,
-		cmapi.IssuerConditionReady,
+		issuerNew.GetConditions(),
+		v1alpha1.IssuerConditionTypeReady,
 	)
 
 	if (readyOld == nil && readyNew != nil) ||
