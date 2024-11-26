@@ -31,7 +31,7 @@ func SetIssuerStatusCondition(
 	conditionType string,
 	status metav1.ConditionStatus,
 	reason, message string,
-) (*metav1.Condition, *metav1.Time) {
+) (*metav1.Condition, metav1.Time) {
 	newCondition := metav1.Condition{
 		Type:               conditionType,
 		Status:             status,
@@ -66,14 +66,14 @@ func SetIssuerStatusCondition(
 		// Overwrite the existing condition
 		(*patchConditions)[idx] = newCondition
 
-		return &newCondition, &nowTime
+		return &newCondition, nowTime
 	}
 
 	// If we've not found an existing condition of this type, we simply insert
 	// the new condition into the slice.
 	*patchConditions = append(*patchConditions, newCondition)
 
-	return &newCondition, &nowTime
+	return &newCondition, nowTime
 }
 
 func GetIssuerStatusCondition(

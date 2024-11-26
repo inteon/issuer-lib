@@ -394,6 +394,10 @@ func (*testissuer) DeepCopyObject() runtime.Object {
 }
 
 func (ti *testissuer) GetConditions() []metav1.Condition {
+	if ti.Status == nil {
+		return nil
+	}
+
 	return ti.Status.Conditions
 }
 

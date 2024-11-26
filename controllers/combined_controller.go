@@ -33,7 +33,7 @@ import (
 	"github.com/cert-manager/issuer-lib/internal/kubeutil"
 )
 
-type CombinedController struct {
+type CombinedController[T any] struct {
 	IssuerTypes        []v1alpha1.Issuer
 	ClusterIssuerTypes []v1alpha1.Issuer
 
@@ -41,10 +41,11 @@ type CombinedController struct {
 
 	MaxRetryDuration time.Duration
 
+	signer.Setup[T]
 	// Check connects to a CA and checks if it is available
-	signer.Check
+	signer.Check[T]
 	// Sign connects to a CA and returns a signed certificate for the supplied CertificateRequest.
-	signer.Sign
+	signer.Sign[T]
 
 	// IgnoreCertificateRequest is an optional function that can prevent the CertificateRequest
 	// and Kubernetes CSR controllers from reconciling a CertificateRequest resource.
@@ -93,7 +94,7 @@ type CombinedController struct {
 	PostSetupWithManager func(context.Context, schema.GroupVersionKind, ctrl.Manager, controller.Controller) error
 }
 
-func (r *CombinedController) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+func (r *CombinedController[T]) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	var err error
 	cl := mgr.GetClient()
 	eventSource := kubeutil.NewEventStore()
@@ -103,13 +104,14 @@ func (r *CombinedController) SetupWithManager(ctx context.Context, mgr ctrl.Mana
 	}
 
 	for _, issuerType := range append(r.IssuerTypes, r.ClusterIssuerTypes...) {
-		if err = (&IssuerReconciler{
+		if err = (&IssuerReconciler[T]{
 			ForObject: issuerType,
 
 			FieldOwner:  r.FieldOwner,
 			EventSource: eventSource,
 
 			Client:        cl,
+			Setup:         r.Setup,
 			Check:         r.Check,
 			IgnoreIssuer:  r.IgnoreIssuer,
 			EventRecorder: r.EventRecorder,
@@ -127,8 +129,8 @@ func (r *CombinedController) SetupWithManager(ctx context.Context, mgr ctrl.Mana
 	}
 
 	if !r.DisableCertificateRequestController {
-		if err = (&CertificateRequestReconciler{
-			RequestController: RequestController{
+		if err = (&CertificateRequestReconciler[T]{
+			RequestController: RequestController[T]{
 				IssuerTypes:        r.IssuerTypes,
 				ClusterIssuerTypes: r.ClusterIssuerTypes,
 
@@ -137,6 +139,7 @@ func (r *CombinedController) SetupWithManager(ctx context.Context, mgr ctrl.Mana
 				EventSource:      eventSource,
 
 				Client:                   cl,
+				Setup:                    r.Setup,
 				Sign:                     r.Sign,
 				IgnoreCertificateRequest: r.IgnoreCertificateRequest,
 				EventRecorder:            r.EventRecorder,
@@ -153,8 +156,8 @@ func (r *CombinedController) SetupWithManager(ctx context.Context, mgr ctrl.Mana
 	}
 
 	if !r.DisableKubernetesCSRController {
-		if err = (&CertificateSigningRequestReconciler{
-			RequestController: RequestController{
+		if err = (&CertificateSigningRequestReconciler[T]{
+			RequestController: RequestController[T]{
 				IssuerTypes:        r.IssuerTypes,
 				ClusterIssuerTypes: r.ClusterIssuerTypes,
 
@@ -163,6 +166,7 @@ func (r *CombinedController) SetupWithManager(ctx context.Context, mgr ctrl.Mana
 				EventSource:      eventSource,
 
 				Client:                   cl,
+				Setup:                    r.Setup,
 				Sign:                     r.Sign,
 				IgnoreCertificateRequest: r.IgnoreCertificateRequest,
 				EventRecorder:            r.EventRecorder,

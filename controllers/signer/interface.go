@@ -40,8 +40,14 @@ import (
 // discouraged, instead the CA should be provisioned separately (e.g. using trust-manager).
 type PEMBundle pki.PEMBundle
 
-type Sign func(ctx context.Context, cr CertificateRequestObject, issuerObject v1alpha1.Issuer) (PEMBundle, error)
-type Check func(ctx context.Context, issuerObject v1alpha1.Issuer) error
+// Special errors: Permanent
+type Setup[T any] func(ctx context.Context, issuerObject v1alpha1.Issuer) (T, error)
+
+// Special errors: Permanent
+type Check[T any] func(ctx context.Context, context T, issuerObject v1alpha1.Issuer) error
+
+// Special errors: Pending and Permanent
+type Sign[T any] func(ctx context.Context, context T, cr CertificateRequestObject) (PEMBundle, error)
 
 // CertificateRequestObject is an interface that represents either a
 // cert-manager CertificateRequest or a Kubernetes CertificateSigningRequest

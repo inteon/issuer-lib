@@ -52,7 +52,7 @@ const (
 )
 
 // IssuerReconciler reconciles a TestIssuer object
-type IssuerReconciler struct {
+type IssuerReconciler[T any] struct {
 	ForObject v1alpha1.Issuer
 
 	FieldOwner  string
@@ -60,8 +60,10 @@ type IssuerReconciler struct {
 
 	// Client is a controller-runtime client used to get and set K8S API resources
 	client.Client
+	// Setup sets up the signer-based constructs which can be used by the Check function.
+	signer.Setup[T]
 	// Check connects to a CA and checks if it is available
-	signer.Check
+	signer.Check[T]
 	// IgnoreIssuer is an optional function that can prevent the issuer controllers from
 	// reconciling an issuer resource.
 	signer.IgnoreIssuer
@@ -83,7 +85,7 @@ type IssuerReconciler struct {
 	PostSetupWithManager func(context.Context, schema.GroupVersionKind, ctrl.Manager, controller.Controller) error
 }
 
-func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, returnedError error) {
+func (r *IssuerReconciler[T]) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, returnedError error) {
 	logger := log.FromContext(ctx).WithName("Reconcile")
 
 	logger.V(2).Info("Starting reconcile loop", "name", req.Name, "namespace", req.Namespace)
@@ -124,7 +126,7 @@ func (r *IssuerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 // The error returned by `reconcileStatusPatch` is meant for controller-runtime,
 // not for the caller. The caller must not check the error (i.e., they must not
 // do `if err != nil...`).
-func (r *IssuerReconciler) reconcileStatusPatch(
+func (r *IssuerReconciler[T]) reconcileStatusPatch(
 	logger logr.Logger,
 	ctx context.Context,
 	req ctrl.Request,
@@ -199,14 +201,21 @@ func (r *IssuerReconciler) reconcileStatusPatch(
 		return result, issuerStatusPatch, nil // apply patch, done
 	}
 
+	var context T
 	var err error
 	if (readyCondition.Status == metav1.ConditionTrue) && (reportedError != nil) {
 		// We received an error from a Certificaterequest while our current status is Ready,
 		// update the ready state of the issuer to reflect the error.
 		err = reportedError
-	} else {
-		err = r.Check(log.IntoContext(ctx, logger), issuer)
 	}
+	if err == nil {
+		// Setup the context
+		context, err = r.Setup(ctx, issuer)
+	}
+	if err == nil {
+		err = r.Check(log.IntoContext(ctx, logger), context, issuer)
+	}
+
 	if err == nil {
 		logger.V(1).Info("Successfully finished the reconciliation.")
 		message := setReadyCondition(
@@ -244,7 +253,7 @@ func (r *IssuerReconciler) reconcileStatusPatch(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *IssuerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+func (r *IssuerReconciler[T]) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	if err := kubeutil.SetGroupVersionKind(mgr.GetScheme(), r.ForObject); err != nil {
 		return err
 	}

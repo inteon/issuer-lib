@@ -50,7 +50,7 @@ import (
 // function. This function is responsible for creating a RequestObjectHelper that
 // is used to interact with the request object.
 // Currently, we support cert-manager CertificateRequests and Kubernetes CertificateSigningRequests.
-type RequestController struct {
+type RequestController[T any] struct {
 	IssuerTypes        []v1alpha1.Issuer
 	ClusterIssuerTypes []v1alpha1.Issuer
 
@@ -60,8 +60,10 @@ type RequestController struct {
 
 	// Client is a controller-runtime client used to get and set K8S API resources
 	client.Client
+	// Setup sets up the signer-based constructs which can be used by the Sign function.
+	signer.Setup[T]
 	// Sign connects to a CA and returns a signed certificate for the supplied Request.
-	signer.Sign
+	signer.Sign[T]
 	// IgnoreCertificateRequest is an optional function that can prevent the Request
 	// and Kubernetes CSR controllers from reconciling a Request resource.
 	signer.IgnoreCertificateRequest
@@ -99,7 +101,7 @@ type IssuerType struct {
 	IsNamespaced bool
 }
 
-func (r *RequestController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *RequestController[T]) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithName("Reconcile")
 
 	logger.V(2).Info("Starting reconcile loop", "name", req.Name, "namespace", req.Namespace)
@@ -144,7 +146,7 @@ func (r *RequestController) Reconcile(ctx context.Context, req ctrl.Request) (ct
 // The error returned by `reconcileStatusPatch` is meant for controller-runtime,
 // not for the caller. The caller must not check the error (i.e., they must not
 // do `if err != nil...`).
-func (r *RequestController) reconcileStatusPatch(
+func (r *RequestController[T]) reconcileStatusPatch(
 	logger logr.Logger,
 	ctx context.Context,
 	req ctrl.Request,
@@ -267,26 +269,27 @@ func (r *RequestController) reconcileStatusPatch(
 		return result, statusPatch, nil // apply patch, done
 	}
 
-	signedCertificate, err := r.Sign(log.IntoContext(ctx, logger), requestObjectHelper.RequestObject(), issuerObject)
-	if err == nil {
-		logger.V(1).Info("Successfully finished the reconciliation.")
-		statusPatch.SetIssued(signedCertificate)
-
-		return result, statusPatch, nil // apply patch, done
-	}
-
 	// An error in the issuer part of the operator should trigger a reconcile
 	// of the issuer's state.
-	if issuerError := new(signer.IssuerError); errors.As(err, issuerError) {
+	context, err := r.Setup(log.IntoContext(ctx, logger), issuerObject)
+	if err != nil {
 		if reportError := r.EventSource.ReportError(
 			issuerGvk, client.ObjectKeyFromObject(issuerObject),
-			issuerError.Err,
+			err,
 		); reportError != nil {
 			return result, nil, fmt.Errorf("unexpected ReportError error: %v", reportError) // requeue with backoff
 		}
 
-		logger.V(1).Info("Issuer is not Ready yet (ready condition out-of-date). Waiting for it to become ready.", "issuer-error", issuerError)
+		logger.V(1).Info("Issuer is not Ready yet (ready condition out-of-date). Waiting for it to become ready.", "issuer-error", err)
 		statusPatch.SetWaitingForIssuerReadyOutdated()
+
+		return result, statusPatch, nil // apply patch, done
+	}
+
+	signedCertificate, err := r.Sign(log.IntoContext(ctx, logger), context, requestObjectHelper.RequestObject())
+	if err == nil {
+		logger.V(1).Info("Successfully finished the reconciliation.")
+		statusPatch.SetIssued(signedCertificate)
 
 		return result, statusPatch, nil // apply patch, done
 	}
@@ -348,7 +351,7 @@ func (r *RequestController) reconcileStatusPatch(
 	}
 }
 
-func (r *RequestController) setAllIssuerTypesWithGroupVersionKind(scheme *runtime.Scheme) error {
+func (r *RequestController[T]) setAllIssuerTypesWithGroupVersionKind(scheme *runtime.Scheme) error {
 	issuers := make([]IssuerType, 0, len(r.IssuerTypes)+len(r.ClusterIssuerTypes))
 	for _, issuer := range r.IssuerTypes {
 		issuers = append(issuers, IssuerType{
@@ -375,16 +378,16 @@ func (r *RequestController) setAllIssuerTypesWithGroupVersionKind(scheme *runtim
 	return nil
 }
 
-func (r *RequestController) AllIssuerTypes() []IssuerType {
+func (r *RequestController[T]) AllIssuerTypes() []IssuerType {
 	return r.allIssuerTypes
 }
 
-func (r *RequestController) Init(
+func (r *RequestController[T]) Init(
 	requestType client.Object,
 	requestPredicate predicate.Predicate,
 	matchIssuerType MatchIssuerType,
 	requestObjectHelperCreator RequestObjectHelperCreator,
-) *RequestController {
+) *RequestController[T] {
 	r.requestType = requestType
 	r.requestPredicate = requestPredicate
 	r.matchIssuerType = matchIssuerType
@@ -396,7 +399,7 @@ func (r *RequestController) Init(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *RequestController) SetupWithManager(
+func (r *RequestController[T]) SetupWithManager(
 	ctx context.Context,
 	mgr ctrl.Manager,
 ) error {

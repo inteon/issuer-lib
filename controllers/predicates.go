@@ -184,8 +184,7 @@ func (IssuerPredicate) Update(e event.UpdateEvent) bool {
 
 	issuerOld, okOld := e.ObjectOld.(v1alpha1.Issuer)
 	issuerNew, okNew := e.ObjectNew.(v1alpha1.Issuer)
-	if (!okOld || !okNew) ||
-		(issuerOld.GetConditions() == nil || issuerNew.GetConditions() == nil) {
+	if !okOld || !okNew {
 		// a reference object is invalid, just reconcile to be safe
 		return true
 	}
