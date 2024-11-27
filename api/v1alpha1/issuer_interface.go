@@ -29,14 +29,4 @@ type Issuer interface {
 	metav1.Object
 
 	GetConditions() []metav1.Condition
-
-	// GetIssuerTypeIdentifier returns a string that uniquely identifies the
-	// issuer type. This should be a constant across all instances of this
-	// issuer type. This string is used as a prefix when determining the
-	// issuer type for a Kubernetes CertificateSigningRequest resource based
-	// on the issuerName field. The value should be formatted as follows:
-	// "<issuer resource (plural)>.<issuer group>". For example, the value
-	// "simpleclusterissuers.issuer.cert-manager.io" will match all CSRs
-	// with an issuerName set to eg. "simpleclusterissuers.issuer.cert-manager.io/issuer1".
-	GetIssuerTypeIdentifier() string
 }

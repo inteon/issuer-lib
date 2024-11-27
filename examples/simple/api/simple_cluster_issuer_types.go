@@ -18,9 +18,12 @@ package api
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/cert-manager/issuer-lib/api/v1alpha1"
 )
+
+var SimpleClusterIssuerGroupVersionResource schema.GroupVersionResource = SchemeGroupVersion.WithResource("simpleclusterissuers")
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
@@ -44,10 +47,6 @@ type SimpleClusterIssuer struct {
 
 func (vi *SimpleClusterIssuer) GetConditions() []metav1.Condition {
 	return vi.Status.Conditions
-}
-
-func (vi *SimpleClusterIssuer) GetIssuerTypeIdentifier() string {
-	return "simpleclusterissuers.testing.cert-manager.io"
 }
 
 var _ v1alpha1.Issuer = &SimpleClusterIssuer{}

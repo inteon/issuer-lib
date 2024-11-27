@@ -401,10 +401,6 @@ func (ti *testissuer) GetConditions() []metav1.Condition {
 	return ti.Status.Conditions
 }
 
-func (ti *testissuer) GetIssuerTypeIdentifier() string {
-	return "test"
-}
-
 func TestLinkedIssuerPredicate(t *testing.T) {
 	predicate := controllers.LinkedIssuerPredicate{}
 
