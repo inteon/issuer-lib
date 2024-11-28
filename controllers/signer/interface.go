@@ -40,8 +40,18 @@ import (
 // discouraged, instead the CA should be provisioned separately (e.g. using trust-manager).
 type PEMBundle pki.PEMBundle
 
-type Sign func(ctx context.Context, cr CertificateRequestObject, issuerObject v1alpha1.Issuer) (PEMBundle, ExtraConditions, error)
-type Check func(ctx context.Context, issuerObject v1alpha1.Issuer) error
+// Special errors: Permanently indicate that Issuer is non-ready
+// Default error behavior (Issuer controller): Retry Issuer with backoff
+// Default error behavior (CR/ CSR controller): Retry linked Issuer with backoff and wait for Issuer to become ready
+type Setup[T any] func(ctx context.Context, issuerObject v1alpha1.Issuer) (T, error)
+
+// Special errors: Permanently indicate that Issuer is non-ready
+// Default error behavior (Issuer controller): Retry Issuer with backoff
+type Check[T any] func(ctx context.Context, setupResult T, issuerObject v1alpha1.Issuer) error
+
+// Special errors: Pending and Permanent
+// Default error behavior (CR/ CSR controller): Retry with backoff until past MaxRetryDuration
+type Sign[T any] func(ctx context.Context, setupResult T, cr CertificateRequestObject) (PEMBundle, ExtraConditions, error)
 
 type ExtraConditions []cmapi.CertificateRequestCondition
 

@@ -66,7 +66,7 @@ func TestTestIssuerReconcilerReconcile(t *testing.T) {
 
 	type testCase struct {
 		name                string
-		check               signer.Check
+		check               signer.Check[struct{}]
 		objects             []client.Object
 		eventSourceError    error
 		validateError       *errormatch.Matcher
@@ -90,8 +90,8 @@ func TestTestIssuerReconcilerReconcile(t *testing.T) {
 		testutil.SetTestIssuerNamespace("ns1"),
 	)
 
-	staticChecker := func(err error) signer.Check {
-		return func(_ context.Context, _ v1alpha1.Issuer) error {
+	staticChecker := func(err error) signer.Check[struct{}] {
+		return func(_ context.Context, _ struct{}, _ v1alpha1.Issuer) error {
 			return err
 		}
 	}
@@ -423,13 +423,16 @@ func TestTestIssuerReconcilerReconcile(t *testing.T) {
 			logger := logrtesting.NewTestLoggerWithOptions(t, logrtesting.Options{LogTimestamp: true, Verbosity: 10})
 			fakeRecorder := record.NewFakeRecorder(100)
 
-			controller := IssuerReconciler{
+			controller := IssuerReconciler[struct{}]{
 				ForObject:  &api.TestIssuer{},
 				FieldOwner: fieldOwner,
 				EventSource: fakeEventSource{
 					err: tc.eventSourceError,
 				},
-				Client:        fakeClient,
+				Client: fakeClient,
+				Setup: func(ctx context.Context, issuerObject v1alpha1.Issuer) (struct{}, error) {
+					return struct{}{}, nil
+				},
 				Check:         tc.check,
 				EventRecorder: fakeRecorder,
 				Clock:         fakeClock2,

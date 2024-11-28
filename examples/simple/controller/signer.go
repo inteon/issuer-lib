@@ -27,9 +27,10 @@ import (
 	"math/big"
 	"time"
 
+	"simple-issuer/api"
+
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"simple-issuer/api"
 
 	"github.com/cert-manager/issuer-lib/api/v1alpha1"
 	"github.com/cert-manager/issuer-lib/controllers"
@@ -51,7 +52,7 @@ import (
 type Signer struct{}
 
 func (s Signer) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
-	return (&controllers.CombinedController{
+	return (&controllers.CombinedController[struct{}]{
 		IssuerTypes: map[schema.GroupResource]v1alpha1.Issuer{
 			api.SimpleIssuerGroupVersionResource.GroupResource(): &api.SimpleIssuer{},
 		},
@@ -62,17 +63,22 @@ func (s Signer) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 		FieldOwner:       "simpleissuer.testing.cert-manager.io",
 		MaxRetryDuration: 1 * time.Minute,
 
+		Setup:         s.Setup,
 		Sign:          s.Sign,
 		Check:         s.Check,
 		EventRecorder: mgr.GetEventRecorderFor("simpleissuer.testing.cert-manager.io"),
 	}).SetupWithManager(ctx, mgr)
 }
 
-func (Signer) Check(ctx context.Context, issuerObject v1alpha1.Issuer) error {
+func (Signer) Setup(ctx context.Context, issuerObject v1alpha1.Issuer) (struct{}, error) {
+	return struct{}{}, nil
+}
+
+func (Signer) Check(ctx context.Context, _ struct{}, issuerObject v1alpha1.Issuer) error {
 	return nil
 }
 
-func (Signer) Sign(ctx context.Context, cr signer.CertificateRequestObject, issuerObject v1alpha1.Issuer) (signer.PEMBundle, error) {
+func (Signer) Sign(ctx context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, error) {
 	// generate random ca private key
 	caPrivateKey, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
 	if err != nil {

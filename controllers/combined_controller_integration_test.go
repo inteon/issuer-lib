@@ -69,10 +69,10 @@ func TestCombinedControllerTemporaryFailedCertificateRequestRetrigger(t *testing
 	ctx := testcontext.ForTest(t)
 	kubeClients := testresource.KubeClients(t, nil)
 
-	checkResult, signResult := make(chan error, 10), make(chan error, 10)
+	setupResult, checkResult, signResult := make(chan error, 10), make(chan error, 10), make(chan error, 10)
 	ctx = setupControllersAPIServerAndClient(t, ctx, kubeClients,
 		func(mgr ctrl.Manager) controllerInterface {
-			return &CombinedController{
+			return &CombinedController[struct{}]{
 				IssuerTypes: map[schema.GroupResource]v1alpha1.Issuer{
 					api.TestIssuerGroupVersionResource.GroupResource(): &api.TestIssuer{},
 				},
@@ -81,7 +81,15 @@ func TestCombinedControllerTemporaryFailedCertificateRequestRetrigger(t *testing
 				},
 				FieldOwner:       fieldOwner,
 				MaxRetryDuration: time.Minute,
-				Check: func(_ context.Context, _ v1alpha1.Issuer) error {
+				Setup: func(ctx context.Context, issuerObject v1alpha1.Issuer) (struct{}, error) {
+					select {
+					case err := <-setupResult:
+						return struct{}{}, err
+					case <-ctx.Done():
+						return struct{}{}, ctx.Err()
+					}
+				},
+				Check: func(_ context.Context, _ struct{}, _ v1alpha1.Issuer) error {
 					select {
 					case err := <-checkResult:
 						return err
@@ -89,7 +97,7 @@ func TestCombinedControllerTemporaryFailedCertificateRequestRetrigger(t *testing
 						return ctx.Err()
 					}
 				},
-				Sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+				Sign: func(_ context.Context, _ struct{}, _ signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 					select {
 					case err := <-signResult:
 						return signer.PEMBundle{}, signer.ExtraConditions{}, err
@@ -204,7 +212,7 @@ func TestCombinedControllerTemporaryFailedCertificateRequestRetrigger(t *testing
 			checkCr2Complete := kubeClients.StartObjectWatch(t, ctx, cr)
 			checkIssuerComplete := kubeClients.StartObjectWatch(t, ctx, issuer)
 
-			signResult <- error(signer.IssuerError{Err: tc.issuerError})
+			setupResult <- error(tc.issuerError)
 
 			t.Log("Waiting for CertificateRequest to have a Pending IssuerOutdated condition")
 			err = checkCr1Complete(func(obj runtime.Object) error {
@@ -304,6 +312,9 @@ func TestCombinedControllerTiming(t *testing.T) { //nolint:tparallel
 	ctx := testcontext.ForTest(t)
 	kubeClients := testresource.KubeClients(t, nil)
 
+	type simulatedSetupResult struct {
+		err error
+	}
 	type simulatedCheckResult struct {
 		err error
 	}
@@ -313,6 +324,7 @@ func TestCombinedControllerTiming(t *testing.T) { //nolint:tparallel
 	}
 
 	type simulatedResult struct {
+		*simulatedSetupResult
 		*simulatedCheckResult
 		*simulatedSignResult
 		expectedSinceLastResult time.Duration
@@ -436,7 +448,7 @@ func TestCombinedControllerTiming(t *testing.T) { //nolint:tparallel
 					expectedSinceLastResult: 0,
 				},
 				{
-					simulatedSignResult:     &simulatedSignResult{cert: nil, err: signer.IssuerError{Err: fmt.Errorf("[error message]")}},
+					simulatedSetupResult:    &simulatedSetupResult{err: fmt.Errorf("[error message]")},
 					expectedSinceLastResult: 0,
 				},
 				{
@@ -462,7 +474,7 @@ func TestCombinedControllerTiming(t *testing.T) { //nolint:tparallel
 
 			ctx := setupControllersAPIServerAndClient(t, ctx, kubeClients,
 				func(mgr ctrl.Manager) controllerInterface {
-					return &CombinedController{
+					return &CombinedController[struct{}]{
 						IssuerTypes: map[schema.GroupResource]v1alpha1.Issuer{
 							api.TestIssuerGroupVersionResource.GroupResource(): &api.TestIssuer{},
 						},
@@ -471,7 +483,27 @@ func TestCombinedControllerTiming(t *testing.T) { //nolint:tparallel
 						},
 						FieldOwner:       fieldOwner,
 						MaxRetryDuration: tc.maxRetryDuration,
-						Check: func(_ context.Context, _ v1alpha1.Issuer) error {
+						Setup: func(_ context.Context, _ v1alpha1.Issuer) (struct{}, error) {
+							resultsMutex.Lock()
+							defer resultsMutex.Unlock()
+							defer func() { resultsIndex++ }()
+
+							if resultsIndex >= len(results)-1 {
+								if resultsIndex > len(results)-1 {
+									errorCh <- fmt.Errorf("too many calls to Setup")
+									return struct{}{}, nil
+								}
+								defer close(done)
+							}
+
+							durations[resultsIndex] = time.Now()
+							if results[resultsIndex].simulatedSetupResult == nil {
+								errorCh <- fmt.Errorf("unexpected call to Setup")
+								return struct{}{}, nil
+							}
+							return struct{}{}, results[resultsIndex].simulatedSetupResult.err
+						},
+						Check: func(_ context.Context, _ struct{}, _ v1alpha1.Issuer) error {
 							resultsMutex.Lock()
 							defer resultsMutex.Unlock()
 							defer func() { resultsIndex++ }()
@@ -490,7 +522,7 @@ func TestCombinedControllerTiming(t *testing.T) { //nolint:tparallel
 							}
 							return results[resultsIndex].simulatedCheckResult.err
 						},
-						Sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+						Sign: func(_ context.Context, _ struct{}, _ signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 							resultsMutex.Lock()
 							defer resultsMutex.Unlock()
 							defer func() { resultsIndex++ }()

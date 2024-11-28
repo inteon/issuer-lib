@@ -56,7 +56,7 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 
 	type testCase struct {
 		name                string
-		sign                signer.Sign
+		sign                signer.Sign[struct{}]
 		objects             []client.Object
 		validateError       *errormatch.Matcher
 		expectedResult      reconcile.Result
@@ -127,8 +127,8 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 		},
 	)
 
-	successSigner := func(cert string) signer.Sign {
-		return func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+	successSigner := func(cert string) signer.Sign[struct{}] {
+		return func(_ context.Context, _ struct{}, _ signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 			return signer.PEMBundle{
 				ChainPEM: []byte(cert),
 			}, signer.ExtraConditions{}, nil
@@ -394,7 +394,7 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 		// condition to Failed.
 		{
 			name: "timeout-permanent-error",
-			sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+			sign: func(_ context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 				return signer.PEMBundle{}, signer.ExtraConditions{}, fmt.Errorf("a specific error")
 			},
 			objects: []client.Object{
@@ -431,7 +431,7 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 		// the MaxRetryDuration has been exceeded).
 		{
 			name: "retry-on-pending-error",
-			sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+			sign: func(_ context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 				return signer.PEMBundle{}, signer.ExtraConditions{}, signer.PendingError{Err: fmt.Errorf("reason for being pending")}
 			},
 			objects: []client.Object{
@@ -471,7 +471,7 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 		// an we still *have time left* to retry, set the Ready condition to *Pending*.
 		{
 			name: "error-set-certificate-request-condition-should-add-new-condition-and-retry",
-			sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+			sign: func(_ context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 				return signer.PEMBundle{}, signer.ExtraConditions{
 					{
 						Type:    "[condition type]",
@@ -523,7 +523,7 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 		// an we still *have time left* to retry, set the Ready condition to *Pending*.
 		{
 			name: "error-set-certificate-request-condition-should-update-existing-condition-and-retry",
-			sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+			sign: func(_ context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 				return signer.PEMBundle{}, signer.ExtraConditions{
 					{
 						Type:    "[condition type]",
@@ -582,7 +582,7 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 		// an we have *no time left* to retry, set the Ready condition to *Failed*.
 		{
 			name: "error-set-certificate-request-condition-should-add-new-condition-and-timeout",
-			sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+			sign: func(_ context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 				return signer.PEMBundle{}, signer.ExtraConditions{
 					{
 						Type:    "[condition type]",
@@ -635,7 +635,7 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 		// an we have *no time left* to retry, set the Ready condition to *Failed*.
 		{
 			name: "error-set-certificate-request-condition-should-update-existing-condition-and-timeout",
-			sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+			sign: func(_ context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 				return signer.PEMBundle{}, signer.ExtraConditions{
 					{
 						Type:    "[condition type]",
@@ -695,7 +695,7 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 		// set to Pending (even if the MaxRetryDuration has been exceeded).
 		{
 			name: "error-set-certificate-request-condition-should-not-timeout-if-pending",
-			sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+			sign: func(_ context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 				return signer.PEMBundle{}, signer.ExtraConditions{
 					{
 						Type:    "[condition type]",
@@ -749,7 +749,7 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 		// set to Failed (even if the MaxRetryDuration has NOT been exceeded).
 		{
 			name: "error-set-certificate-request-condition-should-not-retry-on-permanent-error",
-			sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+			sign: func(_ context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 				return signer.PEMBundle{}, signer.ExtraConditions{
 					{
 						Type:    "[condition type]",
@@ -796,7 +796,7 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 		// Set the Ready condition to Failed if the sign function returns a permanent error.
 		{
 			name: "fail-on-permanent-error",
-			sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+			sign: func(_ context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 				return signer.PEMBundle{}, signer.ExtraConditions{}, signer.PermanentError{Err: fmt.Errorf("a specific error")}
 			},
 			objects: []client.Object{
@@ -830,7 +830,7 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 		// to retry.
 		{
 			name: "retry-on-error",
-			sign: func(_ context.Context, _ signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+			sign: func(_ context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 				return signer.PEMBundle{}, signer.ExtraConditions{}, errors.New("waiting for approval")
 			},
 			objects: []client.Object{
@@ -943,8 +943,8 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 			logger := logrtesting.NewTestLoggerWithOptions(t, logrtesting.Options{LogTimestamp: true, Verbosity: 10})
 			fakeRecorder := record.NewFakeRecorder(100)
 
-			controller := (&CertificateRequestReconciler{
-				RequestController: RequestController{
+			controller := (&CertificateRequestReconciler[struct{}]{
+				RequestController: RequestController[struct{}]{
 					IssuerTypes: map[schema.GroupResource]v1alpha1.Issuer{
 						api.TestIssuerGroupVersionResource.GroupResource(): &api.TestIssuer{},
 					},
@@ -955,9 +955,12 @@ func TestCertificateRequestReconcilerReconcile(t *testing.T) {
 					MaxRetryDuration: time.Minute,
 					EventSource:      kubeutil.NewEventStore(),
 					Client:           fakeClient,
-					Sign:             tc.sign,
-					EventRecorder:    fakeRecorder,
-					Clock:            fakeClock2,
+					Setup: func(ctx context.Context, issuerObject v1alpha1.Issuer) (struct{}, error) {
+						return struct{}{}, nil
+					},
+					Sign:          tc.sign,
+					EventRecorder: fakeRecorder,
+					Clock:         fakeClock2,
 				},
 			}).Init()
 
@@ -1124,8 +1127,8 @@ func TestCertificateRequestMatchIssuerType(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			crr := &CertificateRequestReconciler{
-				RequestController: RequestController{
+			crr := &CertificateRequestReconciler[struct{}]{
+				RequestController: RequestController[struct{}]{
 					IssuerTypes:        tc.issuerTypes,
 					ClusterIssuerTypes: tc.clusterIssuerTypes,
 				},

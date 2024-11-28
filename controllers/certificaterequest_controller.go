@@ -30,8 +30,8 @@ import (
 )
 
 // CertificateRequestReconciler reconciles a CertificateRequest object
-type CertificateRequestReconciler struct {
-	RequestController
+type CertificateRequestReconciler[T any] struct {
+	RequestController[T]
 
 	// SetCAOnCertificateRequest is used to enable setting the CA status field on
 	// the CertificateRequest resource. This is disabled by default.
@@ -41,7 +41,7 @@ type CertificateRequestReconciler struct {
 	SetCAOnCertificateRequest bool
 }
 
-func (r *CertificateRequestReconciler) matchIssuerType(requestObject client.Object) (v1alpha1.Issuer, types.NamespacedName, error) {
+func (r *CertificateRequestReconciler[T]) matchIssuerType(requestObject client.Object) (v1alpha1.Issuer, types.NamespacedName, error) {
 	cr := requestObject.(*cmapi.CertificateRequest)
 
 	if cr == nil {
@@ -73,7 +73,7 @@ func (r *CertificateRequestReconciler) matchIssuerType(requestObject client.Obje
 	return nil, types.NamespacedName{}, fmt.Errorf("no issuer found for reference: [Group=%q, Kind=%q, Name=%q]", cr.Spec.IssuerRef.Group, cr.Spec.IssuerRef.Kind, cr.Spec.IssuerRef.Name)
 }
 
-func (r *CertificateRequestReconciler) Init() *CertificateRequestReconciler {
+func (r *CertificateRequestReconciler[T]) Init() *CertificateRequestReconciler[T] {
 	r.RequestController.Init(
 		&cmapi.CertificateRequest{},
 		CertificateRequestPredicate{},
@@ -89,7 +89,7 @@ func (r *CertificateRequestReconciler) Init() *CertificateRequestReconciler {
 	return r
 }
 
-func (r *CertificateRequestReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+func (r *CertificateRequestReconciler[T]) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	if err := setupCertificateRequestReconcilerScheme(mgr.GetScheme()); err != nil {
 		return err
 	}

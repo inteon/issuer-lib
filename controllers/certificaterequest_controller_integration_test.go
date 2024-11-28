@@ -84,8 +84,8 @@ func TestCertificateRequestControllerIntegrationIssuerInitiallyNotFoundAndNotRea
 	counters := []uint64{}
 	ctx = setupControllersAPIServerAndClient(t, ctx, kubeClients,
 		func(mgr ctrl.Manager) controllerInterface {
-			return &CertificateRequestReconciler{
-				RequestController: RequestController{
+			return &CertificateRequestReconciler[struct{}]{
+				RequestController: RequestController[struct{}]{
 					IssuerTypes: map[schema.GroupResource]v1alpha1.Issuer{
 						api.TestIssuerGroupVersionResource.GroupResource(): &api.TestIssuer{},
 					},
@@ -96,7 +96,7 @@ func TestCertificateRequestControllerIntegrationIssuerInitiallyNotFoundAndNotRea
 					MaxRetryDuration: time.Minute,
 					EventSource:      kubeutil.NewEventStore(),
 					Client:           mgr.GetClient(),
-					Sign: func(_ context.Context, cr signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+					Sign: func(_ context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 						atomic.AddUint64(&counters[extractIdFromNamespace(t, cr.GetNamespace())], 1)
 						return signer.PEMBundle{
 							ChainPEM: []byte("cert"),
@@ -232,8 +232,8 @@ func TestCertificateRequestControllerIntegrationSetCondition(t *testing.T) {
 	signResult := make(chan signResults, 10)
 	ctx = setupControllersAPIServerAndClient(t, ctx, kubeClients,
 		func(mgr ctrl.Manager) controllerInterface {
-			return &CertificateRequestReconciler{
-				RequestController: RequestController{
+			return &CertificateRequestReconciler[struct{}]{
+				RequestController: RequestController[struct{}]{
 					IssuerTypes: map[schema.GroupResource]v1alpha1.Issuer{
 						api.TestIssuerGroupVersionResource.GroupResource(): &api.TestIssuer{},
 					},
@@ -244,7 +244,7 @@ func TestCertificateRequestControllerIntegrationSetCondition(t *testing.T) {
 					MaxRetryDuration: time.Minute,
 					EventSource:      kubeutil.NewEventStore(),
 					Client:           mgr.GetClient(),
-					Sign: func(ctx context.Context, cr signer.CertificateRequestObject, _ v1alpha1.Issuer) (signer.PEMBundle, signer.ExtraConditions, error) {
+					Sign: func(ctx context.Context, _ struct{}, cr signer.CertificateRequestObject) (signer.PEMBundle, signer.ExtraConditions, error) {
 						atomic.AddUint64(&counter, 1)
 						select {
 						case res := <-signResult:

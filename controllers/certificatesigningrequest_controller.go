@@ -31,8 +31,8 @@ import (
 )
 
 // CertificateSigningRequestReconciler reconciles a CertificateSigningRequest object
-type CertificateSigningRequestReconciler struct {
-	RequestController
+type CertificateSigningRequestReconciler[T any] struct {
+	RequestController[T]
 }
 
 // matchIssuerType returns the IssuerType and IssuerName that matches the
@@ -42,7 +42,7 @@ type CertificateSigningRequestReconciler struct {
 // "<issuer-type-id>/<issuer-id>". The issuer-type-id is obtained from the
 // GetIssuerTypeIdentifier function of the IssuerType.
 // The issuer-id is "<name>" for a ClusterIssuer resource.
-func (r *CertificateSigningRequestReconciler) matchIssuerType(requestObject client.Object) (v1alpha1.Issuer, types.NamespacedName, error) {
+func (r *CertificateSigningRequestReconciler[T]) matchIssuerType(requestObject client.Object) (v1alpha1.Issuer, types.NamespacedName, error) {
 	csr := requestObject.(*certificatesv1.CertificateSigningRequest)
 
 	if csr == nil {
@@ -79,7 +79,7 @@ func (r *CertificateSigningRequestReconciler) matchIssuerType(requestObject clie
 	return nil, types.NamespacedName{}, fmt.Errorf("no issuer found for signer name: %q", csr.Spec.SignerName)
 }
 
-func (r *CertificateSigningRequestReconciler) Init() *CertificateSigningRequestReconciler {
+func (r *CertificateSigningRequestReconciler[T]) Init() *CertificateSigningRequestReconciler[T] {
 	r.RequestController.Init(
 		&certificatesv1.CertificateSigningRequest{},
 		CertificateSigningRequestPredicate{},
@@ -95,7 +95,7 @@ func (r *CertificateSigningRequestReconciler) Init() *CertificateSigningRequestR
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *CertificateSigningRequestReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+func (r *CertificateSigningRequestReconciler[T]) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	if err := setupCertificateSigningRequestReconcilerScheme(mgr.GetScheme()); err != nil {
 		return err
 	}
